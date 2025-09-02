@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Face Recognition & Profile Analyzer with Metadata</title>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%, #f093fb 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .glow {
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    }
+    .animate-bounce-custom {
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-10px); }
+      60% { transform: translateY(-5px); }
+    }
+    .card-gradient {
+      background: linear-gradient(145deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .profile-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .profile-card:hover {
+      transform: scale(1.05);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+    }
+    .scan-line {
+      animation: scan 2s linear infinite;
+    }
+    @keyframes scan {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+    .match-indicator {
+      position: relative;
+      overflow: hidden;
+    }
+    .match-indicator::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.3), transparent);
+      animation: scan 2s linear infinite;
+    }
+    .gradient-text {
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    /* Scroll for profile metadata container */
+    #profile_grid {
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    /* Scrollbar styling */
+    #profile_grid::-webkit-scrollbar {
+      width: 8px;
+    }
+    #profile_grid::-webkit-scrollbar-thumb {
+      background-color: rgba(255,255,255,0.3);
+      border-radius: 4px;
+    }
+    /* Input styling override */
+    input[type="text"], input[type="number"], textarea {
+      background-color: rgba(255 255 255 / 0.1);
+      border: 1px solid rgba(255 255 255 / 0.3);
+      color: white;
+      border-radius: 0.375rem;
+      padding: 0.25rem 0.5rem;
+      width: 100%;
+      resize: vertical;
+      font-size: 0.875rem;
+      transition: border-color 0.3s ease;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, textarea:focus {
+      outline: none;
+      border-color: #34d399;
+      background-color: rgba(255 255 255 / 0.15);
+    }
+    label {
+      font-size: 0.8rem;
+      color: #d1d5db;
+      margin-bottom: 0.15rem;
+      display: block;
+    }
+  </style>
+</head>
+<body class="text-white">
+  <div class="container mx-auto px-4 py-8">
+    <header class="text-center mb-12">
+      <h1 class="text-5xl font-extrabold gradient-text mb-4 animate-bounce-custom">Face Recognition & Profile Analyzer</h1>
+      <p class="text-lg opacity-80">Upload profiles with metadata, analyze in real-time, and match with precision</p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Profile Database Section -->
+      <section class="card-gradient rounded-2xl p-8 glow flex flex-col">
+        <h2 class="text-3xl font-bold mb-6 flex items-center">
+          <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/d34e6668-2749-4f61-8a3e-43c202cec21d.png" alt="Database icon" class="mr-3 w-10 h-10" />
+          Profile Database
+        </h2>
+
+        <!-- Upload Area -->
+        <div class="upload-area border-2 border-dashed border-white/20 rounded-xl p-6 mb-6 hover:border-green-400 transition-colors duration-300">
+          <input type="file" id="profile-upload" multiple accept="image/*" class="hidden" onchange="handleProfileUpload()" />
+          <label for="profile-upload" class="cursor-pointer block text-center">
+            <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/7210ba2a-199d-4355-82c0-d2f1a78b2782.png" alt="Upload illustration" class="w-full max-w-sm mx-auto mb-4 rounded-lg shadow-lg" />
+            <button class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:opacity-90 transition-opacity">Choose Profile Photos</button>
+            <p class="text-sm opacity-70 mt-2">Supported: JPG, PNG - Add metadata for each profile</p>
+          </label>
+        </div>
+
+        <!-- Profile Grid with metadata forms -->
+        <div id="profile_grid" class="grid grid-cols-1 gap-6 overflow-y-auto flex-grow">
+          <!-- Profile cards with metadata inputs will be appended here -->
+        </div>
+
+        <button id="save_profiles_btn" class="mt-6 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed" onclick="saveProfiles()" disabled>
+          Save Profiles & Enable Analysis
+        </button>
+
+        <div id="profile_status" class="text-center mt-4 text-sm opacity-70">Upload profile photos to add metadata.</div>
+      </section>
+
+      <!-- Real-Time Analysis Section -->
+      <section class="card-gradient rounded-2xl p-8 glow flex flex-col">
+        <h2 class="text-3xl font-bold mb-6 flex items-center">
+          <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/1fdb97a3-7ed3-492f-8c4d-879d52f7258e.png" alt="Camera icon" class="mr-3 w-10 h-10" />
+          Live Face Analysis
+        </h2>
+
+        <!-- Analysis Controls -->
+        <div class="mb-6 space-y-3">
+          <button id="start_analysis" onclick="startAnalysis()" class="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-opacity" disabled>
+            Activate Camera & Start Analysis
+          </button>
+          <button id="stop_analysis" onclick="stopAnalysis()" class="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-opacity hidden">
+            Stop Analysis & Reset
+          </button>
+        </div>
+
+        <!-- Video Container -->
+        <div class="relative mb-4 flex-grow">
+          <video id="video" class="w-full rounded-lg shadow-2xl" autoplay muted></video>
+          <canvas id="video_overlay" class="absolute top-0 left-0 w-full h-full rounded-lg"></canvas>
+          <div id="scanning_effect" class="absolute top-0 left-0 w-full h-full rounded-lg opacity-0">
+            <div class="scan-line w-full h-full bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
+          </div>
+        </div>
+
+        <div id="analysis_status" class="text-center py-2 text-sm bg-white/10 rounded-full">
+          <span id="status_text">System Ready. Upload and save profiles first.</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- Matching Results Section -->
+    <section id="results_section" class="card-gradient rounded-2xl p-8 mt-8 glow hidden">
+      <h2 class="text-3xl font-bold mb-6 flex items-center">
+        <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/7ae74478-7f6f-497e-96b2-1a6784b6a735.png" alt="Match icon" class="mr-3 w-10 h-10" />
+        Profile Matching Results
+      </h2>
+
+      <div id="match_results" class="space-y-4">
+        <!-- Matching results will appear here -->
+      </div>
+
+      <div id="no_matches" class="text-center py-8 opacity-70 hidden">
+        <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/834c9aa8-11b9-4764-bc1d-964da00ec8ea.png" alt="No match illustration" class="mx-auto mb-4" />
+        <p>No matching profiles detected. Ensure profiles are uploaded and try different angles.</p>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="text-center mt-12 opacity-70">
+      <p class="text-sm">Powered by advanced face recognition technology. Ensure proper lighting for best results.</p>
+    </footer>
+  </div>
+
+  <script>
+    // Global state variables
+    let profiles = []; // {name, age, occupation, description, imageSrc, descriptor}
+    let profileDescriptors = [];
+    let cameraStream;
+    let analysisInterval;
+    let modelsLoaded = false;
+
+    // Load face-api.js models asynchronously
+    async function loadModels() {
+      const loadingEl = document.getElementById('status_text');
+      loadingEl.innerText = 'Initializing AI models...';
+
+      try {
+        const modelUrl = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js/weights/';
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.load(modelUrl),
+          faceapi.nets.faceLandmark68Net.load(modelUrl),
+          faceapi.nets.faceRecognitionNet.load(modelUrl)
+        ]);
+
+        modelsLoaded = true;
+        loadingEl.innerText = 'AI models loaded successfully!';
+        console.log('All face-api.js models loaded successfully.');
+
+        setTimeout(() => {
+          document.getElementById('status_text').innerText = 'Ready to analyze faces.';
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to load models:', error);
+        loadingEl.innerText = 'Error loading AI models. Please refresh and try again.';
+      }
+    }
+
+    // Handle profile image upload and create metadata forms
+    function handleProfileUpload() {
+      const fileInput = document.getElementById('profile-upload');
+      const files = Array.from(fileInput.files);
+      const profileGrid = document.getElementById('profile_grid');
+      const statusEl = document.getElementById('profile_status');
+      const saveBtn = document.getElementById('save_profiles_btn');
+
+      if (files.length === 0) {
+        profileGrid.innerHTML = '';
+        statusEl.innerText = 'No files selected.';
+        saveBtn.disabled = true;
+        return;
+      }
+
+      profileGrid.innerHTML = '';
+      profiles = [];
+      profileDescriptors = [];
+      saveBtn.disabled = true;
+      statusEl.innerText = 'Loading images and preparing metadata forms...';
+
+      files.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const imgSrc = e.target.result;
+
+          // Create profile card with metadata inputs
+          const card = document.createElement('div');
+          card.className = 'profile-card rounded-lg overflow-hidden shadow-lg bg-white/10 p-4 flex flex-col sm:flex-row gap-4 items-center';
+
+          card.innerHTML = `
+            <img src="${imgSrc}" alt="Profile photo preview" class="w-32 h-32 object-cover rounded-lg flex-shrink-0" />
+            <div class="flex-grow w-full max-w-xl">
+              <div class="mb-2">
+                <label for="name_${index}">Name <span class="text-red-400">*</span></label>
+                <input type="text" id="name_${index}" placeholder="Full name" required />
+              </div>
+              <div class="mb-2 grid grid-cols-2 gap-4">
+                <div>
+                  <label for="age_${index}">Age</label>
+                  <input type="number" id="age_${index}" min="0" max="120" placeholder="e.g. 30" />
+                </div>
+                <div>
+                  <label for="occupation_${index}">Occupation</label>
+                  <input type="text" id="occupation_${index}" placeholder="e.g. Engineer" />
+                </div>
+              </div>
+              <div>
+                <label for="description_${index}">Description</label>
+                <textarea id="description_${index}" rows="2" placeholder="Additional info or notes..."></textarea>
+              </div>
+            </div>
+          `;
+
+          profileGrid.appendChild(card);
+
+          // Store temporary profile data with imageSrc only
+          profiles.push({
+            name: '',
+            age: '',
+            occupation: '',
+            description: '',
+            imageSrc: imgSrc,
+            descriptor: null,
+            index: index
+          });
+
+          if (index === files.length - 1) {
+            statusEl.innerText = `Loaded ${files.length} profiles. Please fill metadata and save.`;
+            saveBtn.disabled = false;
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Validate and save profiles metadata, extract face descriptors
+    async function saveProfiles() {
+      const statusEl = document.getElementById('profile_status');
+      const saveBtn = document.getElementById('save_profiles_btn');
+      const startBtn = document.getElementById('start_analysis');
+
+      statusEl.innerText = 'Validating and extracting face data...';
+      saveBtn.disabled = true;
+
+      // Validate all required fields (name)
+      for (let i = 0; i < profiles.length; i++) {
+        const nameInput = document.getElementById(`name_${i}`);
+        if (!nameInput || !nameInput.value.trim()) {
+          alert(`Please enter a name for profile #${i + 1}`);
+          saveBtn.disabled = false;
+          return;
+        }
+      }
+
+      // Update profiles with metadata from inputs
+      for (let i = 0; i < profiles.length; i++) {
+        profiles[i].name = document.getElementById(`name_${i}`).value.trim();
+        profiles[i].age = document.getElementById(`age_${i}`).value.trim();
+        profiles[i].occupation = document.getElementById(`occupation_${i}`).value.trim();
+        profiles[i].description = document.getElementById(`description_${i}`).value.trim();
+      }
+
+      // Extract face descriptors for each profile image
+      profileDescriptors = [];
+      for (let i = 0; i < profiles.length; i++) {
+        const img = new Image();
+        img.src = profiles[i].imageSrc;
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = () => {
+            alert(`Failed to load image for profile ${profiles[i].name}`);
+            resolve();
+          };
+        });
+
+        try {
+          const detection = await faceapi
+            .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+          if (!detection) {
+            alert(`No face detected in profile image for ${profiles[i].name}. Please upload a clear face photo.`);
+            saveBtn.disabled = false;
+            return;
+          }
+
+          profiles[i].descriptor = detection.descriptor;
+          profileDescriptors.push(detection.descriptor);
+        } catch (error) {
+          alert(`Error processing face data for ${profiles[i
